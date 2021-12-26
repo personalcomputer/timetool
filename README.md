@@ -46,7 +46,7 @@ Dec 25, 2021 7:00:49 PM PST (Dec 26 8:30:49a IST / Dec 25 9:00:49p CST / Dec 26 
 
 Parse in a time string from an arbitrary timezone:
 ```
-$ t October 10th 1:30 am Australia/Sydney
+$ t October 10th 2023 1:30 am Australia/Sydney
 1696861800
 2023-10-10T01:30:00.000+11:00     Oct 10, 2023 1:30:00 AM AEDT
 2023-10-09T07:30:00.000-07:00     Oct 09, 2023 7:30:00 AM PDT
@@ -66,7 +66,7 @@ Dec 25, 2021 12:11:34 PM PST (20:11:34 UTC)
 ## Usage
 
 ```
-usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE]
+Usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE]
 
 Examples:
   timetool
@@ -83,4 +83,11 @@ Examples:
   timetool +1.5h
   timetool +1mo
   timetool +01:30:00
+
+Help & support:
+  https://github.com/personalcomputer/timetool/issues
 ```
+
+## Credit
+
+All the smarts in timetool are thanks to [dateutil](https://github.com/dateutil/dateutil), [pytz](https://pythonhosted.org/pytz/), [babel](https://github.com/python-babel/babel), the [CLDR](https://cldr.unicode.org/) and the [tz database](https://www.iana.org/time-zones).

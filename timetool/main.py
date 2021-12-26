@@ -230,7 +230,7 @@ def parse_datetime(datetime_agg):
 
 def main():
     USAGE = textwrap.dedent('''
-        usage: {prog} [-h] [TIME] [in CONVERSION_TIMEZONE]
+        Usage: {prog} [-h] [TIME] [in CONVERSION_TIMEZONE]
 
         Examples:
           {prog}
@@ -247,6 +247,9 @@ def main():
           {prog} +1.5h
           {prog} +1mo
           {prog} +01:30:00
+
+        Help & support:
+          https://github.com/personalcomputer/timetool/issues
     ''').strip()
     if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
         print(USAGE.format(prog=sys.argv[0]))
