@@ -14,6 +14,7 @@ commonly used web tools like https://www.epochconverter.com/ and https://www.tim
 pip install timetool
 
 # Alias timetool as t. This is optional, but recommended for fast access.
+alias t=timetool
 echo 'alias t=timetool' >> ~/.bashrc
 echo 'alias t=timetool' >> ~/.zshrc
 ```
