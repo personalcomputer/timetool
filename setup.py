@@ -11,7 +11,7 @@ with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name=NAME,
-    version='0.2',
+    version='0.3',
     description='Quick timezone and time format conversion tool',
     long_description=long_description,
     long_description_content_type='text/markdown',
