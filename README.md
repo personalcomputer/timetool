@@ -1,6 +1,6 @@
-# timetool (t)
+# timetool (`t`)
 
-Timetool, or "t", is a little command line utility for you to convert between different timezones and datetime
+Timetool, or `t`, is a little command line utility for you to convert between different timezones and datetime
 formats.
 
 It accepts a time as input, in any format, and then outputs it in many different formats and timezones at once.
@@ -13,7 +13,7 @@ commonly used web tools like https://www.epochconverter.com/ and https://www.tim
 ```
 pip install timetool
 
-# Alias timetool as "t". This is optional, but recommended for fast access.
+# Alias timetool as t. This is optional, but recommended for fast access.
 echo 'alias t=timetool' >> ~/.bashrc
 echo 'alias t=timetool' >> ~/.zshrc
 ```
