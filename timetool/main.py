@@ -5,6 +5,7 @@ import textwrap
 import sys
 import warnings
 import csv
+import importlib.resources
 
 import pytz
 import babel.dates
@@ -45,8 +46,9 @@ EXTRA_TIMEZONE_ABBREVIATIONS = {
 # Note: timeconv tries to correctly format times partially using locale information of the locale(s) using that
 # timezone. One timezone is often used by many locales, but there is still a single most likely locale for each
 # timezone. tzinfo used to provide a single primary "country" per timezone, so we use that deprecated data for our
-# purposes. This info is not exposed by python zoneinfo, so we need to have our own zoneinfo file parser.
-zone_tab = csv.reader(open('/usr/share/zoneinfo/zone.tab'), delimiter='\t')
+# purposes. This info is not exposed by python zoneinfo, so we need to have our own zoneinfo file parser. For
+# (attempted) Windows compatibility, we load it in from the tzdata package instead of using the os-provided zoneinfo.
+zone_tab = csv.reader(importlib.resources.open_text('tzdata.zoneinfo', 'zone.tab'), delimiter='\t')
 tz_to_country_str = {
     tz[2]: tz[0].upper() for tz in zone_tab if len(tz) >= 3
 }

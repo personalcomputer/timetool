@@ -11,7 +11,7 @@ with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name=NAME,
-    version='0.3',
+    version='0.4',
     description='Quick timezone and time format conversion tool',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -27,6 +27,7 @@ setup(
         'pytz',
         'babel',
         'python-dateutil',
+        'tzdata',
     ],
     extras_require={},
     include_package_data=True,
