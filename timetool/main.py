@@ -40,7 +40,6 @@ EXTRA_TIMEZONE_ABBREVIATIONS = {
     'CET': 'Europe/Berlin',
     'IST': 'Asia/Kolkata',
     'BST': 'Europe/London',
-    'GMT': 'Europe/London',
 }
 
 # Note: timeconv tries to correctly format times partially using locale information of the locale(s) using that
