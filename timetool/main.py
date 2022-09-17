@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-import datetime
-import re
-import textwrap
-import sys
-import warnings
 import csv
+import datetime
 import importlib.resources
+import re
+import sys
+import textwrap
+import warnings
+from math import floor
+from operator import add
+from operator import sub as subtract
 
-import pytz
 import babel.dates
+import pytz
 from babel.core import Locale, UnknownLocaleError
 from babel.languages import get_territory_language_info
-from dateutil.relativedelta import relativedelta
-from dateutil.parser import parse as dateutil_parse
 from dateutil.parser import UnknownTimezoneWarning
+from dateutil.parser import parse as dateutil_parse
+from dateutil.relativedelta import relativedelta
 
 warnings.filterwarnings('error', category=UnknownTimezoneWarning)
 
@@ -25,21 +28,23 @@ EXTRA_TIMEZONE_ABBREVIATIONS = {
     'PT': 'America/Los_Angeles',
     'PDT': 'America/Los_Angeles',
     'PST': 'America/Los_Angeles',
+    'MOUNTAIN': 'America/Denver',
     'MT': 'America/Denver',
     'MDT': 'America/Denver',
     'MST': 'America/Denver',
-    'CT': 'America/Chicago',
     'CENTRAL': 'America/Chicago',
+    'CT': 'America/Chicago',
     'CDT': 'America/Chicago',
     'CST': 'America/Chicago',  # "CST" more commonly means Asia/Shanghai... need to make this user configured.
+    'EASTERN': 'America/New_York',
     'ET': 'America/New_York',
     'EDT': 'America/New_York',
     'EST': 'America/New_York',
+    'BST': 'Europe/London',
+    'CET': 'Europe/Berlin',
     'CEST': 'Europe/Berlin',
     'CEDT': 'Europe/Berlin',
-    'CET': 'Europe/Berlin',
     'IST': 'Asia/Kolkata',
-    'BST': 'Europe/London',
 }
 
 # Note: timeconv tries to correctly format times partially using locale information of the locale(s) using that
@@ -51,6 +56,8 @@ zone_tab = csv.reader(importlib.resources.open_text('tzdata.zoneinfo', 'zone.tab
 tz_to_country_str = {
     tz[2]: tz[0].upper() for tz in zone_tab if len(tz) >= 3
 }
+
+now = datetime.datetime.now(tz=babel.dates.LOCALTZ)
 
 
 def format_datetime_for_inferred_locale(time, with_seconds=True, date_fmt='long'):
@@ -74,8 +81,9 @@ def format_datetime_for_inferred_locale(time, with_seconds=True, date_fmt='long'
     else:
         # Timezone is an offset-only
         if time.tzinfo.utcoffset(time).total_seconds() == 0:
-            # If offset-only and the offset is zero - 99% of the time people mean UTC, so force it into being UTC and
+            # If offset-only and the offset is zero then 99% of the time people mean UTC, so force it into being UTC and
             # handle as UTC.
+            # (the other 1% of the time they mean GMT instead, i.e. Europe/Lonodon)
             time = time.astimezone(pytz.UTC)
             zone_key = time.tzinfo.zone
         else:
@@ -115,32 +123,13 @@ def parse_timezone(input_timezone_raw):
     return pytz.timezone(input_timezone_raw)
 
 
-def parse_datetime(datetime_agg):
-    class Ret:
-        def __init__(self):
-            self.input_time = None
-            self.input_timezone_raw = None
-            self.highlight_input_time = False
-            self.display_timezones = []
-
-    ret = Ret()
-
-    # Check if the time used 'X in <TIMEZONE>' pattern, if so ensure we display that timezone in the output
-    match = re.search(r' (?:as|in) ((?:[a-zA-Z/_]{2,},? ?){1,})$', datetime_agg, re.IGNORECASE)
-    if match:
-        ret.display_timezones = [parse_timezone(item.strip()) for item in match.group(1).split(',')]
-        datetime_agg = datetime_agg[:match.span()[0]]
-
-    # Check if the time is 'now', or entirely empty.
-    if datetime_agg.strip().lower() in ('', 'now', 'current', 'today'):
-        ret.input_time = datetime.datetime.now(tz=babel.dates.LOCALTZ)
-        return ret
-
-    # Maybe it is a relative time, in form e.g. "-7day"?
+def parse_delta_time(input_str):
+    # Format e.g. "-7day"
     ALL_UNITS = ('y', 'year', 'years', 'mo', 'month', 'months', 'wk', 'w', 'week', 'weeks', 'd', 'day', 'days', 'h',
-                 'hour', 'hours', 'm', 'min', 'mins', 'minute', 'minutes', 's', 'sec', 'secs', 'seconds',)
+                 'hour', 'hours', 'm', 'min', 'mins', 'minute', 'minutes', 's', 'sec', 'secs', 'seconds', 'ms',
+                 'millisecond', 'milliseconds')
     UNITS_REGEX = '|'.join(ALL_UNITS)
-    match = re.match(r'^(?P<sign>[-+])(?P<value>\d{1,8}(?:\.\d+)?) ?(?P<unit>' + UNITS_REGEX + ')', datetime_agg,
+    match = re.match(r'^(?P<sign>[-+]) ?(?P<value>\d{1,8}(?:\.\d+)?) ?(?P<unit>' + UNITS_REGEX + ')(?:\s|$)', input_str,
                      re.IGNORECASE)
     if match:
         value = float(match.group('value'))
@@ -148,9 +137,13 @@ def parse_datetime(datetime_agg):
             value *= -1
         unit = match.group('unit').lower()
         if unit in ('y', 'year', 'years'):
-            delta = relativedelta(years=value)
+            fraction = value % 1
+            delta = relativedelta(years=int(floor(value)))
+            delta += relativedelta(days=fraction * 365)  # (approx) It's not possible to perfectly support fractional years
         elif unit in ('mo', 'month', 'months'):
-            delta = relativedelta(months=value)
+            fraction = value % 1
+            delta = relativedelta(months=int(floor(value)))
+            delta += relativedelta(days=fraction * 30.417)  # (approx) It's not possible to perfectly support fractional months
         elif unit in ('wk', 'w', 'week', 'weeks'):
             delta = relativedelta(weeks=value)
         elif unit in ('d', 'day', 'days'):
@@ -161,12 +154,12 @@ def parse_datetime(datetime_agg):
             delta = relativedelta(minutes=value)
         elif unit in ('s', 'sec', 'secs', 'seconds'):
             delta = relativedelta(seconds=value)
-        now = datetime.datetime.now(tz=babel.dates.LOCALTZ)
-        ret.input_time = now + delta
-        return ret
+        elif unit in ('ms', 'millisecond', 'milliseconds'):
+            delta = relativedelta(seconds=value / 1000)
+        return delta
 
-    # Maybe it is a relative time, in form e.g. "-01:30:"?
-    match = re.match(r'^(?P<sign>[-+])(?P<hours>\d{0,2}):(?P<minutes>\d{0,2}):(?P<seconds>\d{0,2})', datetime_agg,
+    # Format e.g. "-01:30:"
+    match = re.match(r'^(?P<sign>[-+]) ?(?P<hours>\d{0,2}):(?P<minutes>\d{0,2}):(?P<seconds>\d{0,2})(?:\s|$)', input_str,
                      re.IGNORECASE)
     if match:
         delta = datetime.timedelta(seconds=sum([
@@ -176,29 +169,76 @@ def parse_datetime(datetime_agg):
         ]))
         if match.group('sign') == '-':
             delta *= -1
-        now = datetime.datetime.now(tz=babel.dates.LOCALTZ)
-        ret.input_time = now + delta
-        return ret
+        return delta
+
+    return None
+
+
+def parse_datetime_core(datetime_agg, log_input_format=False):
+    def log_format(format_str):
+        if log_input_format:
+            print(f'Input parsed using format: {format_str}')
+
+    input_timezone_raw = None
+    stripped_dt_agg = datetime_agg.strip().lower()
+
+    # Check if the time is "now" (including the behavior for entirely empty input)
+    if stripped_dt_agg in ('now', 'current', 'currently', 'today', 'current time', 'local time'):
+        log_format('now prose')
+        return now, input_timezone_raw
+    if stripped_dt_agg == '':
+        log_format('blank')
+        return now, input_timezone_raw
+
+    # Maybe it is a relative time, in form e.g. "-7day"?
+    delta = parse_delta_time(datetime_agg)
+    if delta is not None:
+        log_format('relative time specifer')
+        return now + delta, input_timezone_raw
+
+    # Maybe it is a relative time, in form e.g. "tomorrow"?
+    if stripped_dt_agg in ('tomorrow', 'yesterday', 'next week', 'last week'):
+        log_format('relative time prose')
+        if stripped_dt_agg == 'tomorrow':
+            return now + relativedelta(days=1), input_timezone_raw
+        if stripped_dt_agg == 'yesterday':
+            return now + relativedelta(days=-1), input_timezone_raw
+        if stripped_dt_agg == 'next week':
+            return now + relativedelta(weeks=1), input_timezone_raw
+        if stripped_dt_agg == 'last week':
+            return now + relativedelta(weeks=-1), input_timezone_raw
 
     # Maybe it is unix time?
+    # Warning: Without leading zeros, our logic only supports unix times after **1973-03-03** and up to **33658**
     if re.match(r'^\d{9,12}(?:\.\d+)?$', datetime_agg):
-        ret.input_time = pytz.utc.localize(datetime.datetime.utcfromtimestamp(float(datetime_agg)))
-        return ret
-
-    # Or unixtime with milliseconds?
-    if re.match(r'^\d{13,16}$', datetime_agg):
-        ret.input_time = pytz.utc.localize(datetime.datetime.utcfromtimestamp(int(datetime_agg) / 1000.0))
-        return ret
+        log_format('unix')
+        return pytz.utc.localize(datetime.datetime.utcfromtimestamp(float(datetime_agg))), input_timezone_raw
+    # Or unixime with milliseconds?
+    # Warning: Without leading zeros, our logic only supports unix times w/ ms after **2001-09-09** and up to **33658**
+    if re.match(r'^\d{13,15}$', datetime_agg):
+        log_format('unix milliseconds')
+        return pytz.utc.localize(datetime.datetime.utcfromtimestamp(int(datetime_agg) / 1000.0)), input_timezone_raw
+    # Or unixtime with microseconds?
+    # Warning: Without leading zeros, our logic only supports unix times w/ us after **1973-03-03** and up to **5138**
+    if re.match(r'^\d{16,18}$', datetime_agg):
+        log_format('unix microseconds')
+        return pytz.utc.localize(datetime.datetime.utcfromtimestamp(int(datetime_agg) / 10000000.0)), input_timezone_raw
+    # Or unixtime with nanoseconds?
+    # Warning: Without leading zeros, our logic only supports unix times w/ ns after **2001-09-09** and up to **33658**
+    if re.match(r'^\d{19,21}$', datetime_agg):
+        log_format('unix nanoseconds')
+        return pytz.utc.localize(
+            datetime.datetime.utcfromtimestamp(int(datetime_agg) / 1000000000.0)), input_timezone_raw
 
     # Try parsing with dateutil - this is the main mode
     try:
-        # First convert specifications like GMT+6 or UTC+6 into just "+6" to avoid the counter-intuitive and unusual
-        # design behavior of dateutil to interpret UTC+6 as meaning a timezone with UTC offset of -0600, which is
-        # opposite to the expected interpretation of it meaning UTC offset +0600. More details at
-        # https://github.com/dateutil/dateutil/issues/70
+        # First convert specifications like GMT+6 or UTC+6 into just "+6" to avoid the extremely counter-intuitive and
+        # unusual design behavior of dateutil/POSIX. POSIX specifies to interpret UTC+6 as meaning a timezone with UTC
+        # offset of -0600, which is opposite to the expected interpretation of it meaning UTC offset +0600. More
+        # details at https://github.com/dateutil/dateutil/issues/70
         datetime_agg_massaged = re.sub(r'(?:GMT|UTC)([+\-]\d+)', r'\1', datetime_agg)
-
-        ret.input_time = dateutil_parse(datetime_agg_massaged)
+        ret = dateutil_parse(datetime_agg_massaged), input_timezone_raw
+        log_format('dateutil (unknown)')
         return ret
     except (ValueError, UnknownTimezoneWarning) as exc:
         original_exception = exc
@@ -206,10 +246,10 @@ def parse_datetime(datetime_agg):
     # Maybe the timezone was included?
     try:
         input_time_raw = datetime_agg.rsplit(' ', 1)[0]
-        ret.input_time = dateutil_parse(input_time_raw)
-        ret.input_timezone_raw = datetime_agg.rsplit(' ', 1)[1]
-        return ret
-    except ValueError:
+        input_timezone_raw = datetime_agg.rsplit(' ', 1)[1]
+        log_format('dateutil (unknown) with extra timezone')
+        return dateutil_parse(input_time_raw), input_timezone_raw
+    except (ValueError, IndexError):
         pass
 
     # Maybe it is actually JUST a timezone they entered?
@@ -219,17 +259,183 @@ def parse_datetime(datetime_agg):
         pass
     else:
         if timezone:
-            ret.input_time = pytz.utc.localize(datetime.datetime.utcnow()).astimezone(timezone)
-            if not ret.display_timezones:
-                ret.highlight_input_time = True
-            return ret
+            log_format('solo timezone')
+            return pytz.utc.localize(now).astimezone(timezone), input_timezone_raw
 
     raise original_exception
 
 
+def add_timezone(input_time, input_timezone_raw):
+    if input_time.tzinfo is None:
+        if not input_timezone_raw:
+            raise ValueError(
+                'Ambiguous timezone in input. Please use a datetime format that encodes a timezone (e.g. '
+                'iso8601 strings or unixtimes), or explicitly specify a timezone after.')
+        input_timezone = parse_timezone(input_timezone_raw)
+        if hasattr(input_timezone, 'localize'):
+            return input_timezone.localize(input_time)
+        else:
+            return input_time.replace(tzinfo=input_timezone)
+    elif input_timezone_raw:
+        raise ValueError(
+            'Multiple input timezones provided. Note that some input formats encode a timezone already (e.g. '
+            'iso8601 strings or unixtimes).')
+    return input_time
+
+
+def parse_datetime(datetime_agg, log_input_format=False):
+    input_time, input_timezone_raw = parse_datetime_core(datetime_agg, log_input_format)
+    input_time = add_timezone(input_time, input_timezone_raw)
+    return input_time
+
+
+def qnr(a, b):
+    """Return quotient and remainder"""
+    return a / b, a % b
+
+
+def humanize_oneterm_timedelta(delta: datetime.timedelta):
+    """ Inspired by https://gist.github.com/zhangsen/1199964 """
+    day_raw = delta.total_seconds() / (24 * 60 * 60)
+    second_raw = delta.seconds
+    microsecond_raw = delta.microseconds
+    year, day = qnr(day_raw, 365)
+    month, day = qnr(day, 30.417)
+    week, day = qnr(day, 7)
+    hour, second = qnr(second_raw, 3600)
+    minute, second = qnr(second, 60)
+    millisecond, microsecond = qnr(microsecond_raw, 1000)
+    periods_zipped = [
+        ('year', year),
+        ('month', month),
+        ('week', week),
+        ('day', day),
+        ('hour', hour),
+        ('minute', minute),
+        ('second', second),
+        ('millisecond', millisecond),
+        ('microsecond', microsecond),
+    ]
+    for period_name, value in periods_zipped:
+        if value < 1:
+            continue
+        plural = '' if value == 1 else 's'
+        return f'{round(value, 1):.1f} {period_name}{plural}'
+
+
+def humanize_oneterm_relativedelta(delta: relativedelta):
+    delta = delta.normalized()
+    if delta.microseconds < 0:
+        delta.seconds -= 1
+        delta.microseconds = 1000000 + delta.microseconds
+    delta.seconds += delta.microseconds / 1000000
+    delta.minutes += delta.seconds / 60
+    delta.hours += delta.minutes / 60
+    delta.days += delta.hours / 24
+    delta.months += delta.days / 30.417
+    delta.years += delta.months / 12
+
+    milliseconds, delta.microseconds = qnr(delta.microseconds, 1000)
+    weeks, delta.days = qnr(delta.days, 7)
+
+    output = []
+    periods_zipped = [
+        ('year', delta.years),
+        ('month', delta.months),
+        ('week', weeks),
+        ('day', delta.days),
+        ('hour', delta.hours),
+        ('minute', delta.minutes),
+        ('second', delta.seconds),
+        ('millisecond', milliseconds),
+        ('microsecond', delta.microseconds),
+    ]
+    for period_name, value in periods_zipped:
+        if value < 1:
+            continue
+        plural = 's' if value > 1 else ''
+        display_value = round(value, 1)
+        return f'{display_value} {period_name}{plural}'
+    return 'identical'
+
+
+def humanize_multiterm(delta: relativedelta, precise=False):
+    delta = delta.normalized()
+    if delta.microseconds < 0:
+        delta.seconds -= 1
+        delta.microseconds = 1000000 + delta.microseconds
+    output = []
+    periods_zipped = [
+        ('year', delta.years),
+        ('month', delta.months),
+        ('week', delta.days // 7),
+        ('day', delta.days % 7),
+        ('hour', delta.hours),
+        ('minute', delta.minutes),
+        ('second', delta.seconds),
+        ('microsecond', delta.microseconds),
+    ]
+    for period_name, value in periods_zipped:
+        if value < 1:
+            if output and not precise:
+                break
+            continue
+        plural = '' if value == 1 else 's'
+        output.append(f'{value} {period_name}{plural}')
+        if len(output) >= 2 and not precise:
+            break
+    if not output:
+        return 'identical'
+    return ' and '.join(output)
+
+
+def humanize_seconds(delta: datetime.timedelta):
+    value = delta.total_seconds()
+    plural = '' if value == 1 else 's'
+    return f'{value} second{plural}'
+
+
+def humanize_time_difference(a_dt, b_dt, variant, relative_to_now_prose=False):
+    delta = a_dt - b_dt
+    delta_seconds = delta.total_seconds()
+    rel_delta = relativedelta(a_dt, b_dt)
+    relative_term = ''
+    sign = ''
+    if delta_seconds < 0:
+        rel_delta *= -1
+        delta *= -1
+        if relative_to_now_prose:
+            relative_term = ' from now'
+        else:
+            sign = '-'
+    else:
+        if relative_to_now_prose:
+            relative_term = ' ago'
+        else:
+            sign = ''
+
+    if variant == 'multiterm':
+        delta_str = humanize_multiterm(rel_delta)
+    elif variant == 'multiterm-precise':
+        delta_str = humanize_multiterm(rel_delta, precise=True)
+    elif variant == 'oneterm':
+        delta_str = humanize_oneterm_relativedelta(rel_delta)
+    elif variant == 'oneterm-alt':
+        delta_str = humanize_oneterm_timedelta(delta)
+    elif variant == 'seconds':
+        delta_str = humanize_seconds(delta)
+
+    if delta_str in ('within a second', 'identical') and relative_to_now_prose:
+        # provide a more now-related casual statement for times very close to now
+        return 'now'
+    else:
+        return f'{sign}{delta_str}{relative_term}'
+    return delta_str
+
+
 def main():
     USAGE = textwrap.dedent('''
-        Usage: {prog} [-h] [TIME] [in CONVERSION_TIMEZONE]
+        Usage: {prog} [-h] [TIME] [in CONVERSION_TIMEZONE] [-o][-e]
 
         Examples:
           {prog}
@@ -242,10 +448,10 @@ def main():
           {prog} 5pm PDT in CEST
           {prog} now in Asia/Hong_Kong
           {prog} now in IST,EDT,CEST,Asia/Tokyo
-          {prog} -7d
-          {prog} +1.5h
-          {prog} +1mo
-          {prog} +01:30:00
+          {prog} - 7d
+          {prog} + 1.5h
+          {prog} + 1mo
+          {prog} + 01:30:00
 
         Help & support:
           https://github.com/personalcomputer/timetool/issues
@@ -255,47 +461,92 @@ def main():
         return
 
     datetime_agg = ' '.join([arg.strip() for arg in sys.argv[1:]])
-    if datetime_agg.endswith('-l'):
-        datetime_agg = datetime_agg[:-2].strip()
+    if datetime_agg.endswith('-e'):
+        datetime_agg = datetime_agg[:-len('-e')].strip()
+        extra_output = True
+    else:
+        extra_output = False
+    if datetime_agg.endswith('-o'):
+        datetime_agg = datetime_agg[:-len('-o')].strip()
         oneline = True
     else:
         oneline = False
-    input_time = None
-    input_timezone_raw = None
-    highlight_input_time = False
 
-    try:
-        ret = parse_datetime(datetime_agg)
-        input_time, input_timezone_raw, highlight_input_time, extra_display_timezones = \
-            ret.input_time, ret.input_timezone_raw, ret.highlight_input_time, ret.display_timezones
-    except ValueError as exc:
-        print(*exc.args)
-        sys.exit(1)
+    # Check if the time used 'X in <TIMEZONE>' pattern, and if so then ensure we display that timezone in the output
+    match = re.search(r' (?:as|in) ((?:[a-zA-Z/_]{2,},? ?){1,})$', datetime_agg, re.IGNORECASE)
+    if match:
+        extra_display_timezones = [parse_timezone(item.strip()) for item in match.group(1).split(',')]
+        datetime_agg = datetime_agg[:match.span()[0]]
+    else:
+        extra_display_timezones = []
 
-    # Add Timezone (if specified in two parts)
-    if input_time.tzinfo is None:
-        if not input_timezone_raw:
-            print('Error: Ambiguous timezone in input. Please use a datetime format that encodes a timezone (e.g. '
-                  'iso8601 strings or unixtimes), or explicitly specify an a timezone after.')
-            sys.exit(1)
-        input_timezone = parse_timezone(input_timezone_raw)
-        if hasattr(input_timezone, 'localize'):
-            input_time = input_timezone.localize(input_time)
+    display_prefix = ''
+
+    if ' - ' in datetime_agg or ' + ' in datetime_agg:
+        # Time arithmetic!
+        if ' - ' in datetime_agg:
+            operator_char = '-'
+            operator = subtract
+        elif ' + ' in datetime_agg:
+            operator_char = '+'
+            operator = add
         else:
-            input_time = input_time.replace(tzinfo=input_timezone)
-    elif input_timezone_raw:
-        print('Error: Multiple input timezones provided. Note that some input formats encode a timezone already (e.g. '
-              'iso8601 strings or unixtimes).')
-        sys.exit(1)
+            raise AssertionError
+        a_str, b_str = datetime_agg.split(f' {operator_char} ')
+        a_dt = parse_datetime(a_str)
+        try:
+            b_dt = parse_datetime(b_str)
+            finding_delta = True
+        except (ValueError, pytz.exceptions.UnknownTimeZoneError) as exc:
+            b_delta = parse_delta_time(f'{operator_char} {b_str}')  # try for delta time
+            if not b_delta:
+                raise exc
+            finding_delta = False
+        if finding_delta:
+            if operator == add:
+                print('Error: Cannot add two datetimes together')
+                sys.exit(1)
+            print(f'{format_datetime_for_inferred_locale(a_dt)} {operator_char} {format_datetime_for_inferred_locale(b_dt)}')
+            handle_delta_display(a_dt, b_dt, extra_output=extra_output)
+            return
+        # finding absolute..
+        print(f'{format_datetime_for_inferred_locale(a_dt)} {operator_char} {b_str}')
+        input_time = a_dt + b_delta
+        display_prefix = '= '
+    else:
+        # Just a single time!
+        try:
+            input_time = parse_datetime(datetime_agg, log_input_format=extra_output)
+        except ValueError as exc:
+            print('Error: ' + (' '.join(exc.args)))
+            sys.exit(1)
 
+    handle_time_display(input_time, display_prefix=display_prefix, oneline=oneline, extra_output=extra_output,
+                        extra_display_timezones=extra_display_timezones)
+
+
+def handle_delta_display(a_dt, b_dt, extra_output):
+    output = [
+        f'~{humanize_time_difference(a_dt, b_dt, variant="oneterm")} '
+        + f'({humanize_time_difference(a_dt, b_dt, variant="seconds")})'
+    ]
+    if extra_output:
+        output.extend([
+            humanize_time_difference(a_dt, b_dt, variant='multiterm-precise'),
+            '~' + humanize_time_difference(a_dt, b_dt, variant='multiterm'),
+            '~' + humanize_time_difference(a_dt, b_dt, variant='oneterm-alt'),
+        ])
+    print(textwrap.indent('\n'.join(output), '= '))
+
+
+def handle_time_display(input_time, display_prefix, oneline, extra_output, extra_display_timezones):
     # Convert
     utc_time = input_time.astimezone(pytz.utc)
     unix_time = input_time.timestamp()
     assert unix_time == (utc_time - pytz.utc.localize(datetime.datetime.utcfromtimestamp(0))).total_seconds()
 
-    # Output
-    prefix = '\033[1m' if not highlight_input_time else ''
-    print(f'{prefix}{unix_time:.0f}\033[0m')
+    output = []
+    output.append(f'\033[1m{unix_time:.0f}\033[0m')
 
     display_timezones = [
         input_time.tzinfo,
@@ -305,7 +556,6 @@ def main():
     ]
 
     display_times = []
-
     seen_timezone_fingerprints = set([])
     for tz in display_timezones:
         time = utc_time.astimezone(tz)
@@ -314,16 +564,14 @@ def main():
             continue
         seen_timezone_fingerprints.add(tz_fingerprint)
         display_times.append(time)
-
     for time in display_times:
-        print(''.join((
+        output.append(''.join((
             time.isoformat(timespec='milliseconds'),
             '     ',
             format_datetime_for_inferred_locale(time),
         )))
 
-    oneline = True
-    if oneline:
+    if extra_output or oneline:
         has_shared_date = True
         shared_date = None
         for time in display_times:
@@ -346,7 +594,22 @@ def main():
         ]
         if time_strs:
             time_str += f' ({" / ".join(time_strs)})'
-        print(time_str)
+        output.append(time_str)
+
+    output.extend([
+        f'~{humanize_time_difference(now, time, variant="oneterm", relative_to_now_prose=True)} '
+        + f'({humanize_time_difference(now, time, variant="seconds", relative_to_now_prose=True)})'
+    ])
+    if extra_output:
+        output.extend([
+            humanize_time_difference(now, time, variant='multiterm-precise', relative_to_now_prose=True),
+            '~' + humanize_time_difference(now, time, variant='oneterm-alt', relative_to_now_prose=True),
+            '~' + humanize_time_difference(now, time, variant='multiterm', relative_to_now_prose=True),
+        ])
+    output_str = '\n'.join(output)
+    if display_prefix:
+        output_str = textwrap.indent(output_str, display_prefix)
+    print(output_str)
 
 
 if __name__ == "__main__":
