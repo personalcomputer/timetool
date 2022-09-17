@@ -124,8 +124,33 @@ def parse_timezone(input_timezone_raw):
 def parse_delta_time(input_str):
     # Format e.g. "-7day"
     ALL_UNITS = (
-        "y", "year", "years", "mo", "month", "months", "wk", "w", "week", "weeks", "d", "day", "days", "h", "hour",
-        "hours", "m", "min", "mins", "minute", "minutes", "s", "sec", "secs", "seconds", "ms", "millisecond",
+        "y",
+        "year",
+        "years",
+        "mo",
+        "month",
+        "months",
+        "wk",
+        "w",
+        "week",
+        "weeks",
+        "d",
+        "day",
+        "days",
+        "h",
+        "hour",
+        "hours",
+        "m",
+        "min",
+        "mins",
+        "minute",
+        "minutes",
+        "s",
+        "sec",
+        "secs",
+        "seconds",
+        "ms",
+        "millisecond",
         "milliseconds",
     )
     UNITS_REGEX = "|".join(ALL_UNITS)
@@ -175,7 +200,7 @@ def parse_delta_time(input_str):
         delta = datetime.timedelta(
             seconds=sum(
                 [
-                    (float(match.group("hours"))   if match.group("hours")   else 0) * 60 * 60,  # noqa E272
+                    (float(match.group("hours")) if match.group("hours") else 0) * 60 * 60,
                     (float(match.group("minutes")) if match.group("minutes") else 0) * 60,
                     (float(match.group("seconds")) if match.group("seconds") else 0),
                 ]
