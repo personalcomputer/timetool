@@ -125,19 +125,23 @@ def parse_delta_time(input_str):
     # Format e.g. "-7day"
     ALL_UNITS = (
         "y",
+        "yr",
+        "yrs",
         "year",
         "years",
         "mo",
         "month",
         "months",
-        "wk",
         "w",
+        "wk",
         "week",
         "weeks",
         "d",
         "day",
         "days",
         "h",
+        "hr",
+        "hrs",
         "hour",
         "hours",
         "m",
@@ -164,7 +168,7 @@ def parse_delta_time(input_str):
         if match.group("sign") == "-":
             value *= -1
         unit = match.group("unit").lower()
-        if unit in ("y", "year", "years"):
+        if unit in ("y", "yr", "yrs", "year", "years"):
             fraction = value % 1
             delta = relativedelta(years=int(floor(value)))
             delta += relativedelta(
@@ -176,11 +180,11 @@ def parse_delta_time(input_str):
             delta += relativedelta(
                 days=fraction * 30.417
             )  # (approx) It's not possible to perfectly support fractional months
-        elif unit in ("wk", "w", "week", "weeks"):
+        elif unit in ("w", "wk", "week", "weeks"):
             delta = relativedelta(weeks=value)
         elif unit in ("d", "day", "days"):
             delta = relativedelta(days=value)
-        elif unit in ("h", "hour", "hours"):
+        elif unit in ("h", "hr", "hrs", "hour", "hours"):
             delta = relativedelta(hours=value)
         elif unit in ("m", "min", "mins", "minute", "minutes"):
             delta = relativedelta(minutes=value)
@@ -247,6 +251,19 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
         if stripped_dt_agg == "last week":
             return now + relativedelta(weeks=-1), input_timezone_raw
 
+    DAYS_OF_WEEK = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    dow_match = re.match(r"(next|last) (" + ("|".join(DAYS_OF_WEEK)) + ")", stripped_dt_agg.lower())
+    if dow_match:
+        log_format("relative time prose")
+        ret_time = now
+        if dow_match.group(1) == "last":
+            ret_time += relativedelta(weeks=-1)
+        else:
+            assert dow_match.group(1) == "next"
+            ret_time += relativedelta(days=1)
+        ret_time += relativedelta(weekday=DAYS_OF_WEEK.index(dow_match.group(2)))
+        return ret_time, input_timezone_raw
+
     # Maybe it is unix time?
     # Warning: Without leading zeros, our logic only supports unix times after **1973-03-03** and up to **33658**
     if re.match(r"^\d{9,12}(?:\.\d+)?$", datetime_agg):
@@ -301,7 +318,7 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
     else:
         if timezone:
             log_format("solo timezone")
-            return pytz.utc.localize(now).astimezone(timezone), input_timezone_raw
+            return now.astimezone(timezone), input_timezone_raw
 
     raise original_exception
 
@@ -311,7 +328,7 @@ def add_timezone(input_time, input_timezone_raw):
         if not input_timezone_raw:
             raise ValueError(
                 "Ambiguous timezone in input. Please use a datetime format that encodes a timezone (e.g. "
-                "iso8601 strings or unixtimes), or explicitly specify a timezone after."
+                + "iso8601 strings or unixtimes), or explicitly specify a timezone after."
             )
         input_timezone = parse_timezone(input_timezone_raw)
         if hasattr(input_timezone, "localize"):
@@ -321,7 +338,7 @@ def add_timezone(input_time, input_timezone_raw):
     elif input_timezone_raw:
         raise ValueError(
             "Multiple input timezones provided. Note that some input formats encode a timezone already (e.g. "
-            "iso8601 strings or unixtimes)."
+            + "iso8601 strings or unixtimes)."
         )
     return input_time
 
@@ -475,7 +492,7 @@ def humanize_time_difference(a_dt, b_dt, variant, relative_to_now_prose=False):
     return delta_str
 
 
-def main():
+def run(argv):
     USAGE = textwrap.dedent(
         """
         Usage: {prog} [-h] [TIME] [in CONVERSION_TIMEZONE] [-o][-e]
@@ -500,11 +517,16 @@ def main():
           https://github.com/personalcomputer/timetool/issues
     """
     ).strip()
-    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
-        print(USAGE.format(prog=sys.argv[0]))
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        print(USAGE.format(prog=argv[0]))
         return
 
-    datetime_agg = " ".join([arg.strip() for arg in sys.argv[1:]])
+    datetime_agg = " ".join([arg.strip() for arg in argv[1:]])
+    if datetime_agg.endswith("--debug"):
+        datetime_agg = datetime_agg[: -len("--debug")].strip()
+        debug = True
+    else:
+        debug = False
     if datetime_agg.endswith("-e"):
         datetime_agg = datetime_agg[: -len("-e")].strip()
         extra_output = True
@@ -564,6 +586,8 @@ def main():
         try:
             input_time = parse_datetime(datetime_agg, log_input_format=extra_output)
         except ValueError as exc:
+            if debug:
+                raise
             print("Error: " + (" ".join(exc.args)))
             sys.exit(1)
 
@@ -611,7 +635,7 @@ def handle_time_display(input_time, display_prefix, oneline, extra_output, extra
     )
 
     display_times = []
-    seen_timezone_fingerprints = set([])
+    seen_timezone_fingerprints = set()
     for tz in display_timezones:
         time = utc_time.astimezone(tz)
         tz_fingerprint = (time.tzname(), time.utcoffset())
@@ -672,5 +696,9 @@ def handle_time_display(input_time, display_prefix, oneline, extra_output, extra
     print(output_str)
 
 
+def main():
+    return run(sys.argv)
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
