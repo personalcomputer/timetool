@@ -240,16 +240,12 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
         return now + delta, input_timezone_raw
 
     # Maybe it is a relative time, in form e.g. "tomorrow"?
-    if stripped_dt_agg in ("tomorrow", "yesterday", "next week", "last week"):
+    if stripped_dt_agg in ("tomorrow", "yesterday"):
         log_format("relative time prose")
         if stripped_dt_agg == "tomorrow":
             return now + relativedelta(days=1), input_timezone_raw
         if stripped_dt_agg == "yesterday":
             return now + relativedelta(days=-1), input_timezone_raw
-        if stripped_dt_agg == "next week":
-            return now + relativedelta(weeks=1), input_timezone_raw
-        if stripped_dt_agg == "last week":
-            return now + relativedelta(weeks=-1), input_timezone_raw
 
     DAYS_OF_WEEK = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     dow_match = re.match(r"(next|last) (" + ("|".join(DAYS_OF_WEEK)) + ")", stripped_dt_agg.lower())
@@ -260,6 +256,8 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
             ret_time += relativedelta(weeks=-1)
         else:
             assert dow_match.group(1) == "next"
+            # Add one day first, because otherwise if you do "next monday" and it is currently monday, it will just
+            # pick today.
             ret_time += relativedelta(days=1)
         ret_time += relativedelta(weekday=DAYS_OF_WEEK.index(dow_match.group(2)))
         return ret_time, input_timezone_raw
@@ -617,14 +615,17 @@ def handle_delta_display(a_dt, b_dt, extra_output):
 
 
 def handle_time_display(input_time, display_prefix, oneline, extra_output, extra_display_timezones):
-    # Convert
     utc_time = input_time.astimezone(pytz.utc)
+
+    # Unix
     unix_time = input_time.timestamp()
     assert unix_time == (utc_time - pytz.utc.localize(datetime.datetime.utcfromtimestamp(0))).total_seconds()
-
     output = []
-    output.append(f"\033[1m{unix_time:.0f}\033[0m")
+    BOLD_TERM_CODE = '\033[1m'  # TODO: Use tput (actually, curses - tigetstr('bold') & tigetstr('sgr0'))
+    NOBOLD_TERM_CODE = '\033[0m'
+    output.append(f"{BOLD_TERM_CODE}{unix_time:.0f}{NOBOLD_TERM_CODE}")
 
+    # Main display of two formats for each timezone
     display_timezones = (
         [
             input_time.tzinfo,
@@ -654,6 +655,7 @@ def handle_time_display(input_time, display_prefix, oneline, extra_output, extra
             )
         )
 
+    # Extra display
     if extra_output or oneline:
         has_shared_date = True
         shared_date = None

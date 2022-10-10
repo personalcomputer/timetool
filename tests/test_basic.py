@@ -5,6 +5,7 @@ import pytz
 
 from timetool.main import run
 
+# Freeze time
 patcher = mock.patch(
     'timetool.main.now',
     new=pytz.timezone('America/Los_Angeles').localize(datetime.datetime(2022, 9, 22, 16, 41, 1, 299009))
@@ -142,15 +143,6 @@ def test_13(capsys):
 
 
 def test_14(capsys):
-    assert _test(capsys, ['t', '+', '01:30:00']) == (
-        '\x1b[1m1663895461\x1b[0m\n'
-        + '2022-09-22T18:11:01.299-07:00     Sep 22, 2022 6:11:01 PM PDT\n'
-        + '2022-09-23T01:11:01.299+00:00     Sep 23, 2022 1:11:01 UTC\n'
-        + '~1.5 hours from now (5400.0 seconds from now)\n'
-    )
-
-
-def test_15(capsys):
     assert _test(capsys, ['t', 'now']) == (
         '\x1b[1m1663890061\x1b[0m\n'
         + '2022-09-22T16:41:01.299-07:00     Sep 22, 2022 4:41:01 PM PDT\n'
