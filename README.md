@@ -66,7 +66,7 @@ Dec 25, 2021 12:11:34 PM PST (20:11:34 UTC)
 ## Usage
 
 ```
-Usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE]
+Usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE] [-o][-e]
 
 Examples:
   timetool
@@ -79,10 +79,10 @@ Examples:
   timetool 5pm PDT in CEST
   timetool now in Asia/Hong_Kong
   timetool now in IST,EDT,CEST,Asia/Tokyo
-  timetool -7d
-  timetool +1.5h
-  timetool +1mo
-  timetool +01:30:00
+  timetool - 7d
+  timetool + 1.5h
+  timetool + 1mo
+  timetool + 01:30:00
 
 Help & support:
   https://github.com/personalcomputer/timetool/issues

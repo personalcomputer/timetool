@@ -1,16 +1,14 @@
 import datetime
-from unittest import mock
-
 import pytz
+from freezegun import freeze_time
 
-from timetool.main import run
 
 # Freeze time
-patcher = mock.patch(
-    'timetool.main.now',
-    new=pytz.timezone('America/Los_Angeles').localize(datetime.datetime(2022, 9, 22, 16, 41, 1, 299009))
-)
-patcher = patcher.start()
+freezer = freeze_time(pytz.timezone('America/Los_Angeles').localize(datetime.datetime(2022, 9, 22, 16, 41, 1, 299009)))
+freezer.start()
+
+
+from timetool.main import run  # noqa: E402
 
 
 def _test(capsys, args):

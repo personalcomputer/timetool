@@ -294,12 +294,13 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
         # details at https://github.com/dateutil/dateutil/issues/70
         datetime_agg_massaged = re.sub(r"(?:GMT|UTC)([+\-]\d+)", r"\1", datetime_agg)
         ret = dateutil_parse(datetime_agg_massaged), input_timezone_raw
+        # todo: try passing in EXTRA_TIMEZONE_ABBREVIATIONS as `tzinfos` arg to dateutil_parse.
         log_format("dateutil (unknown)")
         return ret
     except (ValueError, UnknownTimezoneWarning) as exc:
         original_exception = exc
 
-    # Maybe the timezone was included?
+    # Maybe an unrecognized timezone was included?
     try:
         input_time_raw = datetime_agg.rsplit(" ", 1)[0]
         input_timezone_raw = datetime_agg.rsplit(" ", 1)[1]
@@ -621,8 +622,8 @@ def handle_time_display(input_time, display_prefix, oneline, extra_output, extra
     unix_time = input_time.timestamp()
     assert unix_time == (utc_time - pytz.utc.localize(datetime.datetime.utcfromtimestamp(0))).total_seconds()
     output = []
-    BOLD_TERM_CODE = '\033[1m'  # TODO: Use tput (actually, curses - tigetstr('bold') & tigetstr('sgr0'))
-    NOBOLD_TERM_CODE = '\033[0m'
+    BOLD_TERM_CODE = "\033[1m"  # TODO: Use tput (actually, curses - tigetstr('bold') & tigetstr('sgr0'))
+    NOBOLD_TERM_CODE = "\033[0m"
     output.append(f"{BOLD_TERM_CODE}{unix_time:.0f}{NOBOLD_TERM_CODE}")
 
     # Main display of two formats for each timezone
