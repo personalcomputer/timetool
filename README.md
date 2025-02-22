@@ -66,7 +66,12 @@ Dec 25, 2021 12:11:34 PM PST (20:11:34 UTC)
 ## Usage
 
 ```
-Usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE] [-o][-e]
+Usage: timetool [-h] [TIME] [in CONVERSION_TIMEZONE] [-o][-e][-i]
+
+Flags:
+    -o  Show "one line" output format that includes all timezones in one line.
+    -e  Show extended delta time formats.
+    -i  Output JUST an ISO8601 UTC time. For repurposing timetool for use in scripts.
 
 Examples:
   timetool
@@ -85,7 +90,7 @@ Examples:
   timetool + 01:30:00
 
 Help & support:
-  https://github.com/personalcomputer/timetool/issues
+  https://github.com/personalcomputer/timetool/issues/new
 ```
 
 ## Credit

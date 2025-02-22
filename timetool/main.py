@@ -2,6 +2,7 @@
 import csv
 import datetime
 import importlib.resources
+import os
 import re
 import sys
 import textwrap
@@ -45,6 +46,10 @@ EXTRA_TIMEZONE_ABBREVIATIONS = {
     "CEST": "Europe/Berlin",
     "CEDT": "Europe/Berlin",
     "IST": "Asia/Kolkata",
+    "NZST": "Pacific/Auckland",
+    "NZT": "Pacific/Auckland",
+    "NZDT": "Pacific/Auckland",
+    "JST": "Asia/Tokyo",
 }
 
 # Note: timeconv tries to correctly format times partially using locale information of the locale(s) using that
@@ -152,6 +157,7 @@ def parse_delta_time(input_str):
         "s",
         "sec",
         "secs",
+        "second",
         "seconds",
         "ms",
         "millisecond",
@@ -188,7 +194,7 @@ def parse_delta_time(input_str):
             delta = relativedelta(hours=value)
         elif unit in ("m", "min", "mins", "minute", "minutes"):
             delta = relativedelta(minutes=value)
-        elif unit in ("s", "sec", "secs", "seconds"):
+        elif unit in ("s", "sec", "secs", "second", "seconds"):
             delta = relativedelta(seconds=value)
         elif unit in ("ms", "millisecond", "milliseconds"):
             delta = relativedelta(seconds=value / 1000)
@@ -196,7 +202,7 @@ def parse_delta_time(input_str):
 
     # Format e.g. "-01:30:"
     match = re.match(
-        r"^(?P<sign>[-+]) ?(?P<hours>\d{0,2}):(?P<minutes>\d{0,2}):(?P<seconds>\d{0,2})(?:\s|$)",
+        r"^(?P<sign>[-+]) ?(?P<hours>\d{0,2}):(?P<minutes>\d{0,2}):(?P<seconds>\d{0,2}(?:\.\d{1,6})?)(?:\s|$)",
         input_str,
         re.IGNORECASE,
     )
@@ -276,7 +282,10 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
     # Warning: Without leading zeros, our logic only supports unix times w/ us after **1973-03-03** and up to **5138**
     if re.match(r"^\d{16,18}$", datetime_agg):
         log_format("unix microseconds")
-        return datetime.datetime.fromtimestamp(int(datetime_agg) / 10000000.0, tz=datetime.timezone.utc), input_timezone_raw
+        return (
+            datetime.datetime.fromtimestamp(int(datetime_agg) / 10000000.0, tz=datetime.timezone.utc),
+            input_timezone_raw,
+        )
     # Or unixtime with nanoseconds?
     # Warning: Without leading zeros, our logic only supports unix times w/ ns after **2001-09-09** and up to **33658**
     if re.match(r"^\d{19,21}$", datetime_agg):
@@ -453,6 +462,12 @@ def humanize_seconds(delta: datetime.timedelta):
     return f"{value} second{plural}"
 
 
+def humanize_days(delta: datetime.timedelta):
+    value = round(delta.total_seconds() / (24 * 60 * 60))
+    plural = "" if value == 1 else "s"
+    return f"~{value} day{plural}"
+
+
 def humanize_time_difference(a_dt, b_dt, variant, relative_to_now_prose=False):
     delta = a_dt - b_dt
     delta_seconds = delta.total_seconds()
@@ -482,6 +497,8 @@ def humanize_time_difference(a_dt, b_dt, variant, relative_to_now_prose=False):
         delta_str = humanize_oneterm_timedelta(delta)
     elif variant == "seconds":
         delta_str = humanize_seconds(delta)
+    elif variant == "days":
+        delta_str = humanize_days(delta)
 
     if delta_str in ("within a second", "identical") and relative_to_now_prose:
         # provide a more now-related casual statement for times very close to now
@@ -489,6 +506,23 @@ def humanize_time_difference(a_dt, b_dt, variant, relative_to_now_prose=False):
     else:
         return f"{sign}{delta_str}{relative_term}"
     return delta_str
+
+
+def get_humanized_time_differences(a_dt, b_dt, extended, relative_to_now_prose=False):
+    output = [
+        f'~{humanize_time_difference(a_dt, b_dt, "oneterm", relative_to_now_prose)} '
+        + f'({humanize_time_difference(a_dt, b_dt, "seconds", relative_to_now_prose)})'
+    ]
+    if extended:
+        output.extend(
+            [
+                humanize_time_difference(a_dt, b_dt, "multiterm-precise", relative_to_now_prose),
+                humanize_time_difference(a_dt, b_dt, "days", relative_to_now_prose),
+                "~" + humanize_time_difference(a_dt, b_dt, "oneterm-alt", relative_to_now_prose),
+                "~" + humanize_time_difference(a_dt, b_dt, "multiterm", relative_to_now_prose),
+            ]
+        )
+    return output
 
 
 def run(argv):
@@ -518,11 +552,11 @@ def run(argv):
           {prog} + 01:30:00
 
         Help & support:
-          https://github.com/personalcomputer/timetool/issues
+          https://github.com/personalcomputer/timetool/issues/new
     """
     ).strip()
     if len(argv) > 1 and (set(argv) & set(["-h", "--help"])):
-        print(USAGE.format(prog=argv[0]))
+        print(USAGE.format(prog=os.path.basename(argv[0])))
         return
 
     if "--debug" in argv:
@@ -532,9 +566,9 @@ def run(argv):
         debug = False
     if "-e" in argv:
         argv.remove("-e")
-        extra_output = True
+        extended_output = True
     else:
-        extra_output = False
+        extended_output = False
     if "-o" in argv:
         argv.remove("-o")
         oneline = True
@@ -585,7 +619,7 @@ def run(argv):
                 print(
                     f"{format_datetime_for_inferred_locale(a_dt)} {operator_char} {format_datetime_for_inferred_locale(b_dt)}"
                 )
-            handle_delta_display(a_dt, b_dt, extra_output=extra_output)
+            handle_delta_display(a_dt, b_dt, extended_output=extended_output)
             return
         # finding absolute..
         if not iso8601_only_mode:
@@ -595,7 +629,7 @@ def run(argv):
     else:
         # Just a single time!
         try:
-            input_time = parse_datetime(datetime_agg, log_input_format=extra_output)
+            input_time = parse_datetime(datetime_agg, log_input_format=extended_output)
         except ValueError as exc:
             if debug:
                 raise
@@ -607,28 +641,18 @@ def run(argv):
         display_prefix=display_prefix,
         oneline=oneline,
         iso8601_only_mode=iso8601_only_mode,
-        extra_output=extra_output,
+        extended_output=extended_output,
         extra_display_timezones=extra_display_timezones,
     )
 
 
-def handle_delta_display(a_dt, b_dt, extra_output):
-    output = [
-        f'~{humanize_time_difference(a_dt, b_dt, variant="oneterm")} '
-        + f'({humanize_time_difference(a_dt, b_dt, variant="seconds")})'
-    ]
-    if extra_output:
-        output.extend(
-            [
-                humanize_time_difference(a_dt, b_dt, variant="multiterm-precise"),
-                "~" + humanize_time_difference(a_dt, b_dt, variant="multiterm"),
-                "~" + humanize_time_difference(a_dt, b_dt, variant="oneterm-alt"),
-            ]
-        )
-    print(textwrap.indent("\n".join(output), "= "))
+def handle_delta_display(a_dt, b_dt, extended_output):
+    print(textwrap.indent("\n".join(get_humanized_time_differences(a_dt, b_dt, extended_output)), "= "))
 
 
-def handle_time_display(input_time, display_prefix, oneline, iso8601_only_mode, extra_output, extra_display_timezones):
+def handle_time_display(
+    input_time, display_prefix, oneline, iso8601_only_mode, extended_output, extra_display_timezones
+):
     utc_time = input_time.astimezone(pytz.utc)
 
     if iso8601_only_mode:
@@ -674,7 +698,7 @@ def handle_time_display(input_time, display_prefix, oneline, iso8601_only_mode, 
         )
 
     # Extra display
-    if extra_output or oneline:
+    if extended_output or oneline:
         has_shared_date = True
         shared_date = None
         for time in display_times:
@@ -696,20 +720,7 @@ def handle_time_display(input_time, display_prefix, oneline, iso8601_only_mode, 
             time_str += f' ({" / ".join(time_strs)})'
         output.append(time_str)
 
-    output.extend(
-        [
-            f'~{humanize_time_difference(now, time, variant="oneterm", relative_to_now_prose=True)} '
-            + f'({humanize_time_difference(now, time, variant="seconds", relative_to_now_prose=True)})'
-        ]
-    )
-    if extra_output:
-        output.extend(
-            [
-                humanize_time_difference(now, time, variant="multiterm-precise", relative_to_now_prose=True),
-                "~" + humanize_time_difference(now, time, variant="oneterm-alt", relative_to_now_prose=True),
-                "~" + humanize_time_difference(now, time, variant="multiterm", relative_to_now_prose=True),
-            ]
-        )
+    output.extend(get_humanized_time_differences(now, time, extended=extended_output, relative_to_now_prose=True))
     output_str = "\n".join(output)
     if display_prefix:
         output_str = textwrap.indent(output_str, display_prefix)
