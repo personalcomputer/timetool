@@ -242,7 +242,7 @@ def parse_datetime_core(datetime_agg, log_input_format=False):
     # Maybe it is a relative time, in form e.g. "-7day"?
     delta = parse_delta_time(datetime_agg)
     if delta is not None:
-        log_format("relative time specifer")
+        log_format("relative time specifier")
         return now + delta, input_timezone_raw
 
     # Maybe it is a relative time, in form e.g. "tomorrow"?
@@ -396,26 +396,26 @@ def humanize_oneterm_relativedelta(delta: relativedelta):
     if delta.microseconds < 0:
         delta.seconds -= 1
         delta.microseconds = 1000000 + delta.microseconds
-    delta.seconds += delta.microseconds / 1000000
-    delta.minutes += delta.seconds / 60
-    delta.hours += delta.minutes / 60
-    delta.days += delta.hours / 24
-    delta.months += delta.days / 30.417
-    delta.years += delta.months / 12
+    delta_seconds = delta.seconds + delta.microseconds / 1000000
+    delta_minutes = delta.minutes + delta_seconds / 60
+    delta_hours = delta.hours + delta_minutes / 60
+    delta_days = delta.days + delta_hours / 24
+    delta_months = delta.months + delta_days / 30.417
+    delta_years = delta.years + delta_months / 12
 
-    milliseconds, delta.microseconds = qnr(delta.microseconds, 1000)
-    weeks, delta.days = qnr(delta.days, 7)
+    delta_milliseconds, delta_microseconds = qnr(delta.microseconds, 1000)
+    delta_weeks, delta_days = qnr(delta_days, 7)
 
     periods_zipped = [
-        ("year", delta.years),
-        ("month", delta.months),
-        ("week", weeks),
-        ("day", delta.days),
-        ("hour", delta.hours),
-        ("minute", delta.minutes),
-        ("second", delta.seconds),
-        ("millisecond", milliseconds),
-        ("microsecond", delta.microseconds),
+        ("year", delta_years),
+        ("month", delta_months),
+        ("week", delta_weeks),
+        ("day", delta_days),
+        ("hour", delta_hours),
+        ("minute", delta_minutes),
+        ("second", delta_seconds),
+        ("millisecond", delta_milliseconds),
+        ("microsecond", delta_microseconds),
     ]
     for period_name, value in periods_zipped:
         if value < 1:
@@ -431,7 +431,7 @@ def humanize_multiterm(delta: relativedelta, precise=False):
     if delta.microseconds < 0:
         delta.seconds -= 1
         delta.microseconds = 1000000 + delta.microseconds
-    output = []
+    output: list[str] = []
     periods_zipped = [
         ("year", delta.years),
         ("month", delta.months),
@@ -524,6 +524,7 @@ def get_humanized_time_differences(a_dt, b_dt, extended, relative_to_now_prose=F
         )
         if a_dt == now:
             import natural.date
+
             output.append(natural.date.duration(b_dt, now))
     return output
 
