@@ -988,6 +988,15 @@ wheels = [
 ]
 
 [[package]]
+name = "natural"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0d/ef/68cf67e7dded77070f3471cfaa36b4f59416011307f74d25ee16be94b5ee/natural-0.2.0.tar.gz", hash = "sha256:18c83662d2d33fd7e6eee4e3b0d7366e1ce86225664e3127a2aaf0a3233f7df2", size = 27274 }
+
+[[package]]
 name = "packaging"
 version = "24.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1667,6 +1676,7 @@ source = { editable = "." }
 dependencies = [
     { name = "babel", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.8'" },
     { name = "babel", version = "2.17.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.8'" },
+    { name = "natural" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "tzdata" },
@@ -1698,6 +1708,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "babel" },
+    { name = "natural", specifier = ">=0.2.0" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "tzdata" },

@@ -522,6 +522,9 @@ def get_humanized_time_differences(a_dt, b_dt, extended, relative_to_now_prose=F
                 "~" + humanize_time_difference(a_dt, b_dt, "multiterm", relative_to_now_prose),
             ]
         )
+        if a_dt == now:
+            import natural.date
+            output.append(natural.date.duration(b_dt, now))
     return output
 
 

@@ -22,6 +22,7 @@ dependencies = [
     "babel",
     "python-dateutil",
     "tzdata",
+    "natural>=0.2.0",
 ]
 
 [dependency-groups]
@@ -45,8 +46,9 @@ timetool = "timetool.main:main"
 
 [tool.isort]
 line_length = 120
-default_section = "THIRDPARTY"
+default_section = "THIRDPARTY"  # codespell:ignore
 order_by_type = true
+profile = "black"
 
 [tool.black]
 line-length = 120
