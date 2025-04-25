@@ -1,7 +1,7 @@
 import datetime
+
 import pytz
 from freezegun import freeze_time
-
 
 # Freeze time
 freezer = freeze_time(pytz.timezone("America/Los_Angeles").localize(datetime.datetime(2022, 9, 22, 16, 41, 1, 299009)))

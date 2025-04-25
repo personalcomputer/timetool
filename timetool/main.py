@@ -69,6 +69,8 @@ def format_datetime_for_inferred_locale(time, with_seconds=True, date_fmt="long"
         fmt_date = "%b %d, %Y "
     elif date_fmt == "short":
         fmt_date = "%b %d "
+    elif date_fmt == "with_weekday":
+        fmt_date = "%a %b %d, %Y "
     elif date_fmt is None:
         fmt_date = ""
     else:
@@ -723,6 +725,11 @@ def handle_time_display(
         if time_strs:
             time_str += f' ({" / ".join(time_strs)})'
         output.append(time_str)
+
+    if extended_output:
+        output.append(
+            format_datetime_for_inferred_locale(display_times[0], date_fmt="with_weekday", with_seconds=False)
+        )
 
     output.extend(get_humanized_time_differences(now, time, extended=extended_output, relative_to_now_prose=True))
     output_str = "\n".join(output)
